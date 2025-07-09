@@ -1,7 +1,7 @@
 /*
 		Project:		Invite
 		Module:			invite.cpp
-		Description:	Chess 
+		Description:	Kapu invitations for the BG 
 		Author:			Martin Gäckler
 		Address:		Hofmannsthalweg 14, A-4030 Linz
 		Web:			https://www.gaeckler.at/
@@ -44,7 +44,8 @@
 #include <gak/queue.h>
 #include <gak/numericString.h>
 
-#include <WINLIB/WINAPP.H>
+#include <winlib/WINAPP.H>
+#include <WINLIB/STDDLG.H>
 
 #include "invite_rc.h"
 #include "invite.gui.h"
@@ -71,17 +72,25 @@ using namespace winlibGUI;
 // ----- constants ----------------------------------------------------- //
 // --------------------------------------------------------------------- //
 
-static char UID[]			= "uid";
-static char LOCATION[]		= "location";
-static char ORGANISATOR[]	= "organisator";
-static char ORGAMAIL[]		= "orgamail";
+namespace registryFields
+{
+	static char UID[]			= "uid";
+	static char LOCATION[]		= "location";
+	static char ORGANISATOR[]	= "organisator";
+	static char ORGAMAIL[]		= "orgamail";
+	static char FILENAME[]		= "filename";
+}
+
 static char NEWENTRY[]		= "<neu>";
 
-static char BEGINEVENT[]	= "BEGIN:VEVENT";
-static char SUMMARY[]		= "SUMMARY:";
-static char DESCRIPTION[]	= "DESCRIPTION:";
-static char DTSTART[]		= "DTSTART:";
-static char DTEND[]			= "DTEND:";
+namespace icsFields
+{
+	static char BEGINEVENT[]	= "BEGIN:VEVENT";
+	static char SUMMARY[]		= "SUMMARY:";
+	static char DESCRIPTION[]	= "DESCRIPTION:";
+	static char DTSTART[]		= "DTSTART:";
+	static char DTEND[]			= "DTEND:";
+}
 
 // --------------------------------------------------------------------- //
 // ----- macros -------------------------------------------------------- //
@@ -110,6 +119,8 @@ class InviteMainWindow : public InviteFORM_form
 	static SYSTEMTIME getSystemTimeStamp(DateTimePicker *datePicker, DateTimePicker *timePicker);
 	void readDatesFromGui();
 	void putDatesToGui();
+	void loadFile();
+	void saveFile();
 
 	virtual ProcessStatus handleCreate( void );
 	virtual ProcessStatus handleSelectionChange( int control );
@@ -300,6 +311,157 @@ void InviteMainWindow::putDatesToGui()
 	}
 }
 
+void InviteMainWindow::loadFile()
+{
+	OpenFileDialog	opnDlg;
+
+	STRING theFileName = app.GetProfile( "", registryFields::FILENAME, "" );
+
+	opnDlg.setFilename(theFileName);
+	if( opnDlg.create<int>( this ) )
+	{
+		theFileName = opnDlg.getFilename();
+		app.WriteProfile( false, "", registryFields::FILENAME, theFileName );
+
+		std::ifstream	theFile(theFileName);
+		if( theFile.is_open() )
+		{
+			gak::Queue<STRING>	lines;
+
+			gak::STRING curLine, line;
+			m_calendar.clear();
+			EventsLISTBOX->clearEntries();
+
+			while(!theFile.eof())
+			{
+				line.readLine( theFile );
+
+				if( line[0] == '\t' )
+				{
+					curLine += line.subString(1);
+				}
+				else
+				{
+					if( !curLine.isEmpty() )
+					{
+						lines.push( curLine );
+					}
+					curLine = line;
+				}
+			}
+			if( !curLine.isEmpty() )
+			{
+				lines.push( curLine );
+			}
+			while( lines.size() )
+			{
+				line = "";
+				STRING tmpLine = lines.pop();
+				for( 
+					STRING::const_iterator it = tmpLine.cbegin(), endIT = tmpLine.cend();
+					endIT != it;
+					++it
+				)
+				{
+					char c = *it;
+					if( c == '\\' )
+					{
+						++it;
+						c = *it;
+						if( c == 'n' )
+						{
+							line += "\r\n";
+						}
+					}
+					else
+					{
+						line += c;
+					}	
+				}
+				line = line.decodeUTF8();
+
+				if( line.beginsWith(icsFields::BEGINEVENT) )
+				{
+					m_current = &m_calendar.createElement();
+				}
+				else if( line.beginsWith(icsFields::SUMMARY) )
+				{
+					STRING summary = line.subString(sizeof(icsFields::SUMMARY)-1);
+					m_current->title = summary;
+					EventsLISTBOX->addEntry(summary);
+				}
+				else if( line.beginsWith(icsFields::DESCRIPTION) )
+				{
+					STRING description = line.subString(sizeof(icsFields::DESCRIPTION)-1);
+					m_current->description = description;
+				}
+				else if( line.beginsWith(icsFields::DTSTART) )
+				{
+					STRING start = line.subString(sizeof(icsFields::DTSTART)-1);
+					m_current->start = parseSystemTime(start);
+				}
+				else if( line.beginsWith(icsFields::DTEND) )
+				{
+					STRING end = line.subString(sizeof(icsFields::DTEND)-1);
+					m_current->end = parseSystemTime(end);
+				}
+			}
+			putDatesToGui();
+		}
+	}
+}
+
+void InviteMainWindow::saveFile()
+{
+	SaveFileAsDialog	opnDlg;
+
+	STRING theFileName = app.GetProfile( "", registryFields::FILENAME, "" );
+
+	opnDlg.setFilename(theFileName);
+	if( opnDlg.create<int>( this ) )
+	{
+		theFileName = opnDlg.getFilename();
+		app.WriteProfile( false, "", registryFields::FILENAME, theFileName );
+
+		gak::DateTime nowDT;
+		SYSTEMTIME nowST;
+		nowDT.calcLocalTime().getSystemTime(&nowST);
+
+		int id = app.GetProfile( "", registryFields::UID, 0 );
+		std::ofstream	theFile(theFileName);
+		theFile << "BEGIN:VCALENDAR\n";
+		theFile << "VERSION:2.0\n";
+		theFile << "PRODID:www.gaeckler.at/ics\n";
+		theFile << "METHOD:PUBLISH\n";
+
+		readDatesFromGui();
+		for(
+			gak::Array<Event>::const_iterator it = m_calendar.cbegin(), endIT = m_calendar.cend();
+			it != endIT;
+			++it )
+		{
+			theFile << icsFields::BEGINEVENT << '\n';
+			theFile << "UID:" << ++id << OrgaMailEDIT->getText() << "\n";
+			theFile << "ORGANIZER;CN=\"" << OrgaEDIT->getText().encodeUTF8() << "\":MAILTO:"<< OrgaMailEDIT->getText() <<"\n";
+			theFile << "LOCATION:" << LocationEDIT->getText().encodeUTF8() << '\n';
+			theFile << icsFields::SUMMARY << it->title.encodeUTF8() << '\n';
+			theFile << icsFields::DESCRIPTION << codeLongLine(it->description.encodeUTF8()) << '\n';
+			theFile << "class:PUBLIC\n";
+			theFile << icsFields::DTSTART << it->start << '\n';
+			theFile << icsFields::DTEND << it->end << '\n';
+			theFile << "DTSTAMP:" << nowST << '\n';
+			theFile << "END:VEVENT\n";
+		}
+
+		theFile << "END:VCALENDAR\n";
+
+		app.WriteProfile(false, "", registryFields::LOCATION, LocationEDIT->getText());
+		app.WriteProfile(false, "", registryFields::ORGANISATOR, OrgaEDIT->getText());
+		app.WriteProfile(false, "", registryFields::ORGAMAIL, OrgaMailEDIT->getText());
+		app.WriteProfile(false, "", registryFields::UID, id );
+	}
+}
+
 // --------------------------------------------------------------------- //
 // ----- class protected ----------------------------------------------- //
 // --------------------------------------------------------------------- //
@@ -310,9 +472,9 @@ void InviteMainWindow::putDatesToGui()
    
 ProcessStatus InviteMainWindow::handleCreate( void )
 {
-	LocationEDIT->setText( app.GetProfile("", LOCATION, "") );
-	OrgaEDIT->setText( app.GetProfile("", ORGANISATOR, "") );
-	OrgaMailEDIT->setText( app.GetProfile("", ORGAMAIL, "") );
+	LocationEDIT->setText( app.GetProfile("", registryFields::LOCATION, "") );
+	OrgaEDIT->setText( app.GetProfile("", registryFields::ORGANISATOR, "") );
+	OrgaMailEDIT->setText( app.GetProfile("", registryFields::ORGAMAIL, "") );
 
 	return psDO_DEFAULT;
 }
@@ -374,131 +536,12 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 		}
 		case LoadBUTTON_id:
 		{
-			std::ifstream	theFile("kapu.ics");
-			if( theFile.is_open() )
-			{
-				gak::Queue<STRING>	lines;
-
-				gak::STRING curLine, line;
-				m_calendar.clear();
-				EventsLISTBOX->clearEntries();
-
-				while(!theFile.eof())
-				{
-					line.readLine( theFile );
-
-					if( line[0] == '\t' )
-					{
-						curLine += line.subString(1);
-					}
-					else
-					{
-						if( !curLine.isEmpty() )
-						{
-							lines.push( curLine );
-						}
-						curLine = line;
-					}
-				}
-				if( !curLine.isEmpty() )
-				{
-					lines.push( curLine );
-				}
-				while( lines.size() )
-				{
-					line = "";
-					STRING tmpLine = lines.pop();
-					for( 
-						STRING::const_iterator it = tmpLine.cbegin(), endIT = tmpLine.cend();
-						endIT != it;
-						++it
-					)
-					{
-						char c = *it;
-						if( c == '\\' )
-						{
-							++it;
-							c = *it;
-							if( c == 'n' )
-							{
-								line += "\r\n";
-							}
-						}
-						else
-						{
-							line += c;
-						}	
-					}
-					line = line.decodeUTF8();
-
-					if( line.beginsWith(BEGINEVENT) )
-					{
-						m_current = &m_calendar.createElement();
-					}
-					else if( line.beginsWith(SUMMARY) )
-					{
-						STRING summary = line.subString(sizeof(SUMMARY)-1);
-						m_current->title = summary;
-						EventsLISTBOX->addEntry(summary);
-					}
-					else if( line.beginsWith(DESCRIPTION) )
-					{
-						STRING description = line.subString(sizeof(DESCRIPTION)-1);
-						m_current->description = description;
-					}
-					else if( line.beginsWith(DTSTART) )
-					{
-						STRING start = line.subString(sizeof(DTSTART)-1);
-						m_current->start = parseSystemTime(start);
-					}
-					else if( line.beginsWith(DTEND) )
-					{
-						STRING end = line.subString(sizeof(DTEND)-1);
-						m_current->end = parseSystemTime(end);
-					}
-				}
-				putDatesToGui();
-			}
+			loadFile();
 			break;
 		}
 		case SaveBUTTON_id:
 		{
-			gak::DateTime nowDT;
-			SYSTEMTIME nowST;
-			nowDT.calcLocalTime().getSystemTime(&nowST);
-
-			int id = app.GetProfile( "", UID, 0 );
-			std::ofstream	theFile("kapu.ics");
-			theFile << "BEGIN:VCALENDAR\n";
-			theFile << "VERSION:2.0\n";
-			theFile << "PRODID:www.gaeckler.at/ics\n";
-			theFile << "METHOD:PUBLISH\n";
-
-			readDatesFromGui();
-			for(
-				gak::Array<Event>::const_iterator it = m_calendar.cbegin(), endIT = m_calendar.cend();
-				it != endIT;
-				++it )
-			{
-				theFile << BEGINEVENT << '\n';
-				theFile << "UID:" << ++id << OrgaMailEDIT->getText() << "\n";
-				theFile << "ORGANIZER;CN=\"" << OrgaEDIT->getText().encodeUTF8() << "\":MAILTO:"<< OrgaMailEDIT->getText() <<"\n";
-				theFile << "LOCATION:" << LocationEDIT->getText().encodeUTF8() << '\n';
-				theFile << SUMMARY << it->title.encodeUTF8() << '\n';
-				theFile << DESCRIPTION << codeLongLine(it->description.encodeUTF8()) << '\n';
-				theFile << "class:PUBLIC\n";
-				theFile << "DTSTART:" << it->start << '\n';
-				theFile << "DTEND:" << it->end << '\n';
-				theFile << "DTSTAMP:" << nowST << '\n';
-				theFile << "END:VEVENT\n";
-			}
-
-			theFile << "END:VCALENDAR\n";
-
-			app.WriteProfile(false, "", LOCATION, LocationEDIT->getText());
-			app.WriteProfile(false, "", ORGANISATOR, OrgaEDIT->getText());
-			app.WriteProfile(false, "", ORGAMAIL, OrgaMailEDIT->getText());
-			app.WriteProfile(false, "", UID, id );
+			saveFile();
 			break;
 		}
 	default:
