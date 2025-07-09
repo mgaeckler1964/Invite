@@ -1,7 +1,7 @@
 Invite
 ======
 
-This programm is used top create simple ICS-files with invitations
+This programm is used to create simple ICS-files with invitations
 
 Actually it is still in progress. There are two more open tasks:
 
