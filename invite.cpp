@@ -41,8 +41,8 @@
 #include <iostream>
 #include <iomanip>
 
+#include <gak/queue.h>
 #include <gak/numericString.h>
-#include <gak/fmtNumber.h>
 
 #include <WINLIB/WINAPP.H>
 
@@ -75,6 +75,13 @@ static char UID[]			= "uid";
 static char LOCATION[]		= "location";
 static char ORGANISATOR[]	= "organisator";
 static char ORGAMAIL[]		= "orgamail";
+static char NEWENTRY[]		= "<neu>";
+
+static char BEGINEVENT[]	= "BEGIN:VEVENT";
+static char SUMMARY[]		= "SUMMARY:";
+static char DESCRIPTION[]	= "DESCRIPTION:";
+static char DTSTART[]		= "DTSTART:";
+static char DTEND[]			= "DTEND:";
 
 // --------------------------------------------------------------------- //
 // ----- macros -------------------------------------------------------- //
@@ -167,6 +174,34 @@ static WindowsApplication	app;
 // ----- module functions ---------------------------------------------- //
 // --------------------------------------------------------------------- //
 
+SYSTEMTIME parseSystemTime( const STRING &systimeStr)
+{
+	SYSTEMTIME	utctime;
+	SYSTEMTIME	localtime;
+
+	STRING	year, month, day;
+	STRING	hour, minute, second;
+	year = systimeStr.subString( 0, 4 );
+	month = systimeStr.subString( 4, 2 );
+	day = systimeStr.subString( 6, 2 );
+	hour = systimeStr.subString( 9, 2 );
+	minute = systimeStr.subString( 11, 2 );
+	second = systimeStr.subString( 13, 2 );
+
+	utctime.wYear = year.getValueE<WORD>();
+	utctime.wMonth = month.getValueE<WORD>();
+	utctime.wDay = day.getValueE<WORD>();
+
+	utctime.wHour = hour.getValueE<WORD>();
+	utctime.wMinute = minute.getValueE<WORD>();
+	utctime.wSecond = second.getValueE<WORD>();
+	utctime.wMilliseconds = 0;
+
+	gak::DateTime	theTime(utctime, false);
+	theTime.calcLocalTime().getSystemTime(&localtime );
+
+	return localtime;
+}
 std::ostream &operator << ( std::ostream &stream, const SYSTEMTIME &timestamp )
 {
 	SYSTEMTIME		utcTimeStanp;
@@ -328,17 +363,110 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 {
 	switch( buttonID )
 	{
-	case NewBUTTON_id:
+		case NewBUTTON_id:
 		{
 			m_current = &m_calendar.createElement();
-			m_current->title = "<neu>";
-			EventsLISTBOX->addEntry("<neu>");
+			m_current->title = NEWENTRY;
+			EventsLISTBOX->addEntry(NEWENTRY);
 			EventsLISTBOX->selectEntry( int(EventsLISTBOX->getNumEntries() -1) );
 			handleSelectionChange(EventsLISTBOX_id);
 			break;
 		}
-	case SaveBUTTON_id:
+		case LoadBUTTON_id:
 		{
+			std::ifstream	theFile("kapu.ics");
+			if( theFile.is_open() )
+			{
+				gak::Queue<STRING>	lines;
+
+				gak::STRING curLine, line;
+				m_calendar.clear();
+				EventsLISTBOX->clearEntries();
+
+				while(!theFile.eof())
+				{
+					line.readLine( theFile );
+
+					if( line[0] == '\t' )
+					{
+						curLine += line.subString(1);
+					}
+					else
+					{
+						if( !curLine.isEmpty() )
+						{
+							lines.push( curLine );
+						}
+						curLine = line;
+					}
+				}
+				if( !curLine.isEmpty() )
+				{
+					lines.push( curLine );
+				}
+				while( lines.size() )
+				{
+					line = "";
+					STRING tmpLine = lines.pop();
+					for( 
+						STRING::const_iterator it = tmpLine.cbegin(), endIT = tmpLine.cend();
+						endIT != it;
+						++it
+					)
+					{
+						char c = *it;
+						if( c == '\\' )
+						{
+							++it;
+							c = *it;
+							if( c == 'n' )
+							{
+								line += "\r\n";
+							}
+						}
+						else
+						{
+							line += c;
+						}	
+					}
+					line = line.decodeUTF8();
+
+					if( line.beginsWith(BEGINEVENT) )
+					{
+						m_current = &m_calendar.createElement();
+					}
+					else if( line.beginsWith(SUMMARY) )
+					{
+						STRING summary = line.subString(sizeof(SUMMARY)-1);
+						m_current->title = summary;
+						EventsLISTBOX->addEntry(summary);
+					}
+					else if( line.beginsWith(DESCRIPTION) )
+					{
+						STRING description = line.subString(sizeof(DESCRIPTION)-1);
+						m_current->description = description;
+					}
+					else if( line.beginsWith(DTSTART) )
+					{
+						STRING start = line.subString(sizeof(DTSTART)-1);
+						m_current->start = parseSystemTime(start);
+					}
+					else if( line.beginsWith(DTEND) )
+					{
+						STRING end = line.subString(sizeof(DTEND)-1);
+						m_current->end = parseSystemTime(end);
+					}
+				}
+				restoreDates();
+			}
+			break;
+		}
+		case SaveBUTTON_id:
+		{
+			gak::DateTime nowDT;
+			SYSTEMTIME nowST;
+			nowDT.calcLocalTime().getSystemTime(&nowST);
+
 			int id = app.GetProfile( "", UID, 0 );
 			std::ofstream	theFile("kapu.ics");
 			theFile << "BEGIN:VCALENDAR\n";
@@ -352,16 +480,16 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 				it != endIT;
 				++it )
 			{
-				theFile << "BEGIN:VEVENT\n";
+				theFile << BEGINEVENT << '\n';
 				theFile << "UID:" << ++id << OrgaMailEDIT->getText() << "\n";
 				theFile << "ORGANIZER;CN=\"" << OrgaEDIT->getText().encodeUTF8() << "\":MAILTO:"<< OrgaMailEDIT->getText() <<"\n";
 				theFile << "LOCATION:" << LocationEDIT->getText().encodeUTF8() << '\n';
-				theFile << "SUMMARY:" << it->title.encodeUTF8() << '\n';
-				theFile << "DESCRIPTION:" << codeLongLine(it->description.encodeUTF8()) << '\n';
+				theFile << SUMMARY << it->title.encodeUTF8() << '\n';
+				theFile << DESCRIPTION << codeLongLine(it->description.encodeUTF8()) << '\n';
 				theFile << "class:PUBLIC\n";
 				theFile << "DTSTART:" << it->start << '\n';
 				theFile << "DTEND:" << it->end << '\n';
-				theFile << "DTSTAMP:" << it->start << '\n';
+				theFile << "DTSTAMP:" << nowST << '\n';
 				theFile << "END:VEVENT\n";
 			}
 
