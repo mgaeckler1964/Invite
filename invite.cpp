@@ -107,9 +107,9 @@ class InviteMainWindow : public InviteFORM_form
 	gak::Array<Event>	m_calendar;
 	Event				*m_current;
 
-	static SYSTEMTIME getDateTime(DateTimePicker *datePicker, DateTimePicker *timePicker);
-	void saveDates();
-	void restoreDates();
+	static SYSTEMTIME getSystemTimeStamp(DateTimePicker *datePicker, DateTimePicker *timePicker);
+	void readDatesFromGui();
+	void putDatesToGui();
 
 	virtual ProcessStatus handleCreate( void );
 	virtual ProcessStatus handleSelectionChange( int control );
@@ -260,7 +260,7 @@ InviteMainWindow::InviteMainWindow() : InviteFORM_form(nullptr), m_current(nullp
 // ----- class static functions ---------------------------------------- //
 // --------------------------------------------------------------------- //
 
-SYSTEMTIME InviteMainWindow::getDateTime(DateTimePicker *datePicker, DateTimePicker *timePicker)
+SYSTEMTIME InviteMainWindow::getSystemTimeStamp(DateTimePicker *datePicker, DateTimePicker *timePicker)
 {
 	SYSTEMTIME	sysdate, systime, merged;
 	datePicker->getSystemTime(sysdate);
@@ -280,16 +280,16 @@ SYSTEMTIME InviteMainWindow::getDateTime(DateTimePicker *datePicker, DateTimePic
 // ----- class privates ------------------------------------------------ //
 // --------------------------------------------------------------------- //
 
-void InviteMainWindow::saveDates()
+void InviteMainWindow::readDatesFromGui()
 {
 	if( m_current )
 	{
-		m_current->start = getDateTime(StartDATEPICKER, StartTIMEPICKER);
-		m_current->end = getDateTime(EndDATEPICKER, EndTIMEPICKER);
+		m_current->start = getSystemTimeStamp(StartDATEPICKER, StartTIMEPICKER);
+		m_current->end = getSystemTimeStamp(EndDATEPICKER, EndTIMEPICKER);
 	}
 }
 
-void InviteMainWindow::restoreDates()
+void InviteMainWindow::putDatesToGui()
 {
 	if( m_current )
 	{
@@ -321,7 +321,7 @@ ProcessStatus InviteMainWindow::handleSelectionChange( int control )
 {
 	if( control == EventsLISTBOX_id )
 	{
-		saveDates();
+		readDatesFromGui();
 		int selected = EventsLISTBOX->getSelection();
 		if(selected >= 0 && selected < m_calendar.size() )
 		{
@@ -334,7 +334,7 @@ ProcessStatus InviteMainWindow::handleSelectionChange( int control )
 		{
 			m_current = nullptr;
 		}
-		restoreDates();
+		putDatesToGui();
 	}
 
 	return psSEND_TO_PARENT;
@@ -457,7 +457,7 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 						m_current->end = parseSystemTime(end);
 					}
 				}
-				restoreDates();
+				putDatesToGui();
 			}
 			break;
 		}
@@ -474,7 +474,7 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 			theFile << "PRODID:www.gaeckler.at/ics\n";
 			theFile << "METHOD:PUBLISH\n";
 
-			saveDates();
+			readDatesFromGui();
 			for(
 				gak::Array<Event>::const_iterator it = m_calendar.cbegin(), endIT = m_calendar.cend();
 				it != endIT;
