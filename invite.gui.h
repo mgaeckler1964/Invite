@@ -39,11 +39,11 @@ namespace winlibGUI {
 		GuiApplication(int iconID=-1) : winlib::Application(iconID) {}
 	};
 
-	class InviteFORM_form : public winlib::OverlappedWindow {
+	class InviteFORM_form : public winlib::PopupWindow {
 		public:
-		InviteFORM_form(winlib::BasicWindow *owner) : OverlappedWindow(owner) {}
+		InviteFORM_form(winlib::BasicWindow *owner) : PopupWindow(owner) {}
 		winlib::SuccessCode create(winlib::BasicWindow*parent) {
-			return OverlappedWindow::create(parent,"InviteFORM");
+			return PopupWindow::create(parent,"InviteFORM");
 		}
 
 		winlib::ListBox *EventsLISTBOX;
