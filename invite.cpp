@@ -113,16 +113,18 @@ struct Event
 
 class InviteMainWindow : public InviteFORM_form
 {
+	time_t				m_defaultDuration;
 	gak::Array<Event>	m_calendar;
 	Event				*m_current;
 
 	static SYSTEMTIME getSystemTimeStamp(DateTimePicker *datePicker, DateTimePicker *timePicker);
+	time_t getCurrentDuration() const;
 	void readDatesFromGui();
 	void putDatesToGui();
 	void loadFile();
-	void saveFile();
+	void saveFile();	// not const;
 
-	virtual ProcessStatus handleCreate( void );
+	virtual ProcessStatus handleCreate();
 	virtual ProcessStatus handleSelectionChange( int control );
 	virtual ProcessStatus handleEditChange( int control );
 	virtual ProcessStatus handleButtonClick( int control );
@@ -263,7 +265,7 @@ STRING codeLongLine( const STRING &line )
 // ----- class constructors/destructors -------------------------------- //
 // --------------------------------------------------------------------- //
 
-InviteMainWindow::InviteMainWindow() : InviteFORM_form(nullptr), m_current(nullptr)
+InviteMainWindow::InviteMainWindow() : InviteFORM_form(nullptr), m_current(nullptr), m_defaultDuration(3600)
 {
 }
 
@@ -290,6 +292,19 @@ SYSTEMTIME InviteMainWindow::getSystemTimeStamp(DateTimePicker *datePicker, Date
 // --------------------------------------------------------------------- //
 // ----- class privates ------------------------------------------------ //
 // --------------------------------------------------------------------- //
+
+time_t InviteMainWindow::getCurrentDuration() const
+{
+	time_t	duration = 0;
+	if( m_current )
+	{
+		gak::DateTime dtStart( m_current->start, false );
+		gak::DateTime dtEnd( m_current->end, false );
+
+		duration = dtEnd.getUtcUnixSeconds() - dtStart.getUtcUnixSeconds();
+	}
+	return duration;
+}
 
 void InviteMainWindow::readDatesFromGui()
 {
@@ -470,7 +485,7 @@ void InviteMainWindow::saveFile()
 // ----- class virtuals ------------------------------------------------ //
 // --------------------------------------------------------------------- //
 
-ProcessStatus InviteMainWindow::handleCreate( void )
+ProcessStatus InviteMainWindow::handleCreate()
 {
 	LocationEDIT->setText( app.GetProfile("", registryFields::LOCATION, "") );
 	OrgaEDIT->setText( app.GetProfile("", registryFields::ORGANISATOR, "") );
@@ -485,7 +500,7 @@ ProcessStatus InviteMainWindow::handleSelectionChange( int control )
 	{
 		readDatesFromGui();
 		int selected = EventsLISTBOX->getSelection();
-		if(selected >= 0 && selected < m_calendar.size() )
+		if(selected >= 0 && size_t(selected) < m_calendar.size() )
 		{
 			m_current = &m_calendar[selected];
 
@@ -500,26 +515,39 @@ ProcessStatus InviteMainWindow::handleSelectionChange( int control )
 	}
 	else if( control == StartDATEPICKER_id || control == EndDATEPICKER_id || control == StartTIMEPICKER_id || control == EndTIMEPICKER_id )
 	{
-		SYSTEMTIME start = getSystemTimeStamp(StartDATEPICKER, StartTIMEPICKER);
-		SYSTEMTIME end = getSystemTimeStamp(EndDATEPICKER, EndTIMEPICKER);
+		std::time_t		currentDuration = getCurrentDuration();	
+		SYSTEMTIME		start = getSystemTimeStamp(StartDATEPICKER, StartTIMEPICKER);
+		SYSTEMTIME		end = getSystemTimeStamp(EndDATEPICKER, EndTIMEPICKER);
 
 		gak::DateTime	startDT( start, false );
 		gak::DateTime	endDT( end, false );
 
 		std::time_t		startTT = startDT.getUtcUnixSeconds();
 		std::time_t		endTT = endDT.getUtcUnixSeconds();
-
-		if( startTT > endTT )
+		std::time_t		newDuration = endTT - startTT;
+		if( startTT < endTT )
 		{
+			if( newDuration > m_defaultDuration )
+			{
+				m_defaultDuration = newDuration;
+			}
+		}
+		else
+		{
+			if( currentDuration <= 0 )
+			{
+				currentDuration = m_defaultDuration;
+			}
+
 			if( control == StartDATEPICKER_id || control == StartTIMEPICKER_id )
 			{
-				std::time_t		newEndTT = startTT + 3600;
+				std::time_t		newEndTT = startTT + currentDuration;
 				EndDATEPICKER->setTimeT( newEndTT );
 				EndTIMEPICKER->setTimeT( newEndTT );
 			}
 			else
 			{
-				std::time_t		newStartTT = endTT - 3600;
+				std::time_t		newStartTT = endTT - currentDuration;
 				StartDATEPICKER->setTimeT( newStartTT );
 				StartTIMEPICKER->setTimeT( newStartTT );
 			}
