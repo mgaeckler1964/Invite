@@ -336,7 +336,7 @@ void InviteMainWindow::loadFile()
 			{
 				line.readLine( theFile );
 
-				if( line[0] == '\t' )
+				if( line[0U] == '\t' )
 				{
 					curLine += line.subString(1);
 				}
@@ -469,7 +469,7 @@ void InviteMainWindow::saveFile()
 // --------------------------------------------------------------------- //
 // ----- class virtuals ------------------------------------------------ //
 // --------------------------------------------------------------------- //
-   
+
 ProcessStatus InviteMainWindow::handleCreate( void )
 {
 	LocationEDIT->setText( app.GetProfile("", registryFields::LOCATION, "") );
@@ -497,6 +497,33 @@ ProcessStatus InviteMainWindow::handleSelectionChange( int control )
 			m_current = nullptr;
 		}
 		putDatesToGui();
+	}
+	else if( control == StartDATEPICKER_id || control == EndDATEPICKER_id || control == StartTIMEPICKER_id || control == EndTIMEPICKER_id )
+	{
+		SYSTEMTIME start = getSystemTimeStamp(StartDATEPICKER, StartTIMEPICKER);
+		SYSTEMTIME end = getSystemTimeStamp(EndDATEPICKER, EndTIMEPICKER);
+
+		gak::DateTime	startDT( start, false );
+		gak::DateTime	endDT( end, false );
+
+		std::time_t		startTT = startDT.getUtcUnixSeconds();
+		std::time_t		endTT = endDT.getUtcUnixSeconds();
+
+		if( startTT > endTT )
+		{
+			if( control == StartDATEPICKER_id || control == StartTIMEPICKER_id )
+			{
+				std::time_t		newEndTT = startTT + 3600;
+				EndDATEPICKER->setTimeT( newEndTT );
+				EndTIMEPICKER->setTimeT( newEndTT );
+			}
+			else
+			{
+				std::time_t		newStartTT = endTT - 3600;
+				StartDATEPICKER->setTimeT( newStartTT );
+				StartTIMEPICKER->setTimeT( newStartTT );
+			}
+		}
 	}
 
 	return psSEND_TO_PARENT;
@@ -527,6 +554,7 @@ ProcessStatus InviteMainWindow::handleButtonClick( int buttonID )
 	{
 		case NewBUTTON_id:
 		{
+			readDatesFromGui();
 			m_current = &m_calendar.createElement();
 			m_current->title = NEWENTRY;
 			EventsLISTBOX->addEntry(NEWENTRY);
