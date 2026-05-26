@@ -135,26 +135,24 @@ public:
 
 class WindowsApplication : public GuiApplication
 {
-	virtual bool 	startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ )
+	virtual bool startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ )
 	{
 		doEnableLogEx(gakLogging::llInfo);
 		doDisableLog();
 		setApplication("invite");
-		setComapny("gak");
+		setCompany("gak");
 		return 0;
 	}
 	virtual CallbackWindow  *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ )
 	{
-		InviteMainWindow	*mainWindow = new InviteMainWindow;
-		if( mainWindow->create( NULL ) == scERROR )
+		std::auto_ptr<InviteMainWindow>	mainWindow( new InviteMainWindow );
+		if( mainWindow->create( nullptr ) == scERROR )
 		{
-			MessageBox( NULL, "Could not create window", "Error", MB_ICONERROR );
-			delete mainWindow;
-			mainWindow = NULL;
+			throw gak::LibraryException( "Could not create window!" );
 		}
 		mainWindow->focus();
 
-		return mainWindow;
+		return mainWindow.release();
 	}
 	virtual void deleteMainWindow( BasicWindow  *mainWindow )
 	{
