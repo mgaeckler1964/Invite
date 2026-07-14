@@ -145,7 +145,7 @@ class WindowsApplication : public GuiApplication
 	}
 	virtual CallbackWindow  *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ )
 	{
-		std::auto_ptr<InviteMainWindow>	mainWindow( new InviteMainWindow );
+		std::unique_ptr<InviteMainWindow>	mainWindow( new InviteMainWindow );
 		if( mainWindow->create( nullptr ) == scERROR )
 		{
 			throw gak::LibraryException( "Could not create window!" );
