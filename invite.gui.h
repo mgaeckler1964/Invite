@@ -11,6 +11,7 @@
 #include <winlib/scrollFrame.h>
 #include <winlib/ControlW.h>
 #include <winlib/xmlEditorChild.h>
+#include <winlib/chartWin.h>
 #include <winlib/gridView.h>
 
 #include <winlib/winApp.h>
@@ -35,15 +36,15 @@ namespace winlibGUI {
 
 	class GuiApplication : public winlib::Application {
 		public:
-		virtual gak::xml::Document *getGuiDoc( void );
+		virtual gak::xml::Document *getGuiDoc();
 		GuiApplication(int iconID=-1) : winlib::Application(iconID) {}
 	};
 
-	class InviteFORM_form : public winlib::PopupWindow {
+	class InviteFORM_form : public winlib::OverlappedWindow {
 		public:
-		InviteFORM_form(winlib::BasicWindow *owner) : PopupWindow(owner) {}
+		InviteFORM_form(winlib::BasicWindow *owner) : OverlappedWindow(owner) {}
 		winlib::SuccessCode create(winlib::BasicWindow*parent) {
-			return PopupWindow::create(parent,"InviteFORM");
+			return OverlappedWindow::create(parent,"InviteFORM");
 		}
 
 		winlib::ListBox *EventsLISTBOX;
