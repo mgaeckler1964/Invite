@@ -45,7 +45,7 @@
 #include <gak/numericString.h>
 
 #include <winlib/WINAPP.H>
-#include <WINLIB/STDDLG.H>
+#include <winlib/StandardDialogs.h>
 
 #include "invite_rc.h"
 #include "invite.gui.h"
@@ -124,10 +124,10 @@ class InviteMainWindow : public InviteFORM_form
 	void loadFile();
 	void saveFile();	// not const;
 
-	virtual ProcessStatus handleCreate();
-	virtual ProcessStatus handleSelectionChange( int control );
-	virtual ProcessStatus handleEditChange( int control );
-	virtual ProcessStatus handleButtonClick( int control );
+	ProcessStatus handleCreate() override;
+	ProcessStatus handleSelectionChange( int control ) override;
+	ProcessStatus handleEditChange( int control ) override;
+	ProcessStatus handleButtonClick( int control ) override;
 
 public:
 	InviteMainWindow();
@@ -135,7 +135,7 @@ public:
 
 class WindowsApplication : public GuiApplication
 {
-	virtual bool startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ )
+	bool startApplication( HINSTANCE /*hInstance*/, const char * /*cmdLine*/ )  override
 	{
 		doEnableLogEx(gakLogging::llInfo);
 		doDisableLog();
@@ -143,7 +143,7 @@ class WindowsApplication : public GuiApplication
 		setCompany("gak");
 		return 0;
 	}
-	virtual CallbackWindow  *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ )
+	CallbackWindow  *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<InviteMainWindow>	mainWindow( new InviteMainWindow );
 		if( mainWindow->create( nullptr ) == scERROR )
@@ -154,7 +154,7 @@ class WindowsApplication : public GuiApplication
 
 		return mainWindow.release();
 	}
-	virtual void deleteMainWindow( BasicWindow  *mainWindow )
+	void deleteMainWindow( BasicWindow  *mainWindow ) override
 	{
 		delete mainWindow;
 	}
