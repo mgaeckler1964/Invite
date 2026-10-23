@@ -143,7 +143,7 @@ class WindowsApplication : public GuiApplication
 		setCompany("gak");
 		return 0;
 	}
-	CallbackWindow  *createMainWindow( const char * /*cmdLine*/, int /*nCmdShow*/ ) override
+	CallbackWindow  *createMainWindow( const char * /*cmdLine*/, ShowWindowMode /*nCmdShow*/ ) override
 	{
 		std::unique_ptr<InviteMainWindow>	mainWindow( new InviteMainWindow );
 		if( mainWindow->create( nullptr ) == scERROR )
@@ -331,7 +331,7 @@ void InviteMainWindow::loadFile()
 	STRING theFileName = app.GetProfile( "", registryFields::FILENAME, "" );
 
 	opnDlg.setFilename(theFileName);
-	if( opnDlg.create<int>( this ) )
+	if( opnDlg.create( this ) )
 	{
 		theFileName = opnDlg.getFilename();
 		app.WriteProfile( false, "", registryFields::FILENAME, theFileName );
@@ -431,7 +431,7 @@ void InviteMainWindow::saveFile()
 	STRING theFileName = app.GetProfile( "", registryFields::FILENAME, "" );
 
 	opnDlg.setFilename(theFileName);
-	if( opnDlg.create<int>( this ) )
+	if( opnDlg.create( this ) )
 	{
 		theFileName = opnDlg.getFilename();
 		app.WriteProfile( false, "", registryFields::FILENAME, theFileName );
